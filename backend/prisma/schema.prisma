@@ -1,0 +1,196 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String            @id @default(cuid())
+  name                  String
+  email                 String            @unique
+  passwordHash          String
+  profilePhoto          String?
+  bio                   String?
+  location              String?           // General area / city (safe)
+  languages             String?           // e.g. "English, Spanish"
+  experience            String?           // e.g. "5 years culinary baking"
+  skillsLearningInterest String?          // e.g. "Guitar, Italian Cooking, Python"
+  role                  String            @default("USER") // USER, ADMIN
+  verificationStatus    Boolean           @default(false)
+  isSuspended           Boolean           @default(false)
+  privacyAreaVisible    Boolean           @default(true)
+  privacyProfilePublic  Boolean           @default(true)
+  createdDate           DateTime          @default(now())
+  updatedDate           DateTime          @updatedAt
+
+  // Relationships
+  skills                Skill[]           @relation("OwnerSkills")
+  sentRequests          LearningRequest[] @relation("RequesterRequests")
+  receivedRequests      LearningRequest[] @relation("OwnerRequests")
+  connectionsAsUser1    Connection[]      @relation("User1Connections")
+  connectionsAsUser2    Connection[]      @relation("User2Connections")
+  sentMessages          Message[]         @relation("SentMessages")
+  receivedMessages      Message[]         @relation("ReceivedMessages")
+  givenReviews          Review[]          @relation("GivenReviews")
+  receivedReviews       Review[]          @relation("ReceivedReviews")
+  savedSkills           SavedSkill[]
+  reportsFiled          Report[]          @relation("ReporterReports")
+  reportsReceived       Report[]          @relation("ReportedUserReports")
+  blocksGiven           Block[]           @relation("BlockerBlocks")
+  blocksReceived        Block[]           @relation("BlockedUserBlocks")
+  learningProgress      LearningProgress[]
+}
+
+model Skill {
+  id               String            @id @default(cuid())
+  ownerId          String
+  owner            User              @relation("OwnerSkills", fields: [ownerId], references: [id], onDelete: Cascade)
+  skillName        String
+  category         String            // Technology, Cooking, Art & Design, Photography, Music, Fitness, Languages, Gardening, Handcraft, Business, Communication, Other Skills
+  description      String
+  skillLevel       String            // Beginner, Intermediate, Advanced, All Levels
+  language         String            // e.g. "English", "Spanish"
+  learningMode     String            // Online, In-Person, Both
+  availableDays    String?           // e.g. "Weekends, Tuesday evenings"
+  availableTimes   String?           // e.g. "6:00 PM - 8:00 PM"
+  targetLearners   String?           // e.g. "Absolute beginners, all ages"
+  generalArea      String?           // Safe general area for offline learning e.g. "Downtown / Central Park area"
+  isFeatured       Boolean           @default(false)
+  createdDate      DateTime          @default(now())
+  updatedDate      DateTime          @updatedAt
+
+  requests         LearningRequest[]
+  connections      Connection[]
+  savedByUsers     SavedSkill[]
+  reviews          Review[]
+  reports          Report[]
+  learningProgress LearningProgress[]
+}
+
+model LearningRequest {
+  id               String      @id @default(cuid())
+  requesterId      String
+  requester        User        @relation("RequesterRequests", fields: [requesterId], references: [id], onDelete: Cascade)
+  skillOwnerId     String
+  skillOwner       User        @relation("OwnerRequests", fields: [skillOwnerId], references: [id], onDelete: Cascade)
+  skillId          String
+  skill            Skill       @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  preferredTime    String
+  learningMode     String      // Online, In-Person
+  message          String?
+  status           String      @default("Pending") // Pending, Accepted, Declined, Cancelled, Completed
+  isSwapRequest    Boolean     @default(false)
+  swapSkillOffered String?     // Skill offered in return if swap
+  createdDate      DateTime    @default(now())
+  updatedDate      DateTime    @updatedAt
+
+  connection       Connection?
+}
+
+model Connection {
+  id               String      @id @default(cuid())
+  requestId        String?     @unique
+  request          LearningRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  user1Id          String      // Skill Owner / Teacher
+  user1            User        @relation("User1Connections", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2Id          String      // Learner
+  user2            User        @relation("User2Connections", fields: [user2Id], references: [id], onDelete: Cascade)
+  skillId          String
+  skill            Skill       @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  status           String      @default("Started") // Started, Learning, Completed
+  startedDate      DateTime    @default(now())
+  completedDate    DateTime?
+  createdDate      DateTime    @default(now())
+  updatedDate      DateTime    @updatedAt
+
+  messages         Message[]
+  reviews          Review[]
+  learningProgress LearningProgress[]
+}
+
+model Message {
+  id               String      @id @default(cuid())
+  connectionId     String
+  connection       Connection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  senderId         String
+  sender           User        @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId       String
+  receiver         User        @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  message          String
+  readStatus       Boolean     @default(false)
+  timestamp        DateTime    @default(now())
+}
+
+model Review {
+  id               String      @id @default(cuid())
+  reviewerId       String
+  reviewer         User        @relation("GivenReviews", fields: [reviewerId], references: [id], onDelete: Cascade)
+  reviewedUserId   String
+  reviewedUser     User        @relation("ReceivedReviews", fields: [reviewedUserId], references: [id], onDelete: Cascade)
+  connectionId     String
+  connection       Connection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  skillId          String
+  skill            Skill       @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  rating           Int         // 1 to 5
+  reviewText       String
+  isHelpful        Boolean     @default(true)
+  createdDate      DateTime    @default(now())
+
+  @@unique([reviewerId, connectionId])
+}
+
+model SavedSkill {
+  id               String      @id @default(cuid())
+  userId           String
+  user             User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skillId          String
+  skill            Skill       @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  createdDate      DateTime    @default(now())
+
+  @@unique([userId, skillId])
+}
+
+model LearningProgress {
+  id               String      @id @default(cuid())
+  learnerId        String
+  learner          User        @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  skillId          String
+  skill            Skill       @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  connectionId     String?
+  connection       Connection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  status           String      @default("Started") // Started, Learning, Completed
+  notes            String?
+  startedDate      DateTime    @default(now())
+  completedDate    DateTime?
+  createdDate      DateTime    @default(now())
+  updatedDate      DateTime    @updatedAt
+}
+
+model Report {
+  id               String      @id @default(cuid())
+  reporterId       String
+  reporter         User        @relation("ReporterReports", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUserId   String?
+  reportedUser     User?       @relation("ReportedUserReports", fields: [reportedUserId], references: [id], onDelete: Cascade)
+  reportedSkillId  String?
+  reportedSkill    Skill?      @relation(fields: [reportedSkillId], references: [id], onDelete: Cascade)
+  reason           String
+  description      String
+  status           String      @default("Pending") // Pending, Reviewed, Dismissed, ActionTaken
+  adminNotes       String?
+  createdDate      DateTime    @default(now())
+}
+
+model Block {
+  id               String      @id @default(cuid())
+  blockerId        String
+  blocker          User        @relation("BlockerBlocks", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedUserId    String
+  blockedUser      User        @relation("BlockedUserBlocks", fields: [blockedUserId], references: [id], onDelete: Cascade)
+  createdDate      DateTime    @default(now())
+
+  @@unique([blockerId, blockedUserId])
+}
